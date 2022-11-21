@@ -31,7 +31,7 @@ $$
 \text{L2(Euclidean)distance: }d_2(I_1,I_2)=\sqrt{\sum_P (I_1^P-I_2^P)^2}
 $$
 
-![](D:\OneDrive%20-%20中山大学\研0\Stanford-CS231n-2021-and-2022\assets\2022-11-18-16-26-28-image.png)
+![](D:\OneDrive%20-%20中山大学\研0\moqj-CS231N\CS231N\note\assets\5ca3f8ca5e11ae9d055e1b5c53cb04c1ab3de2de.png)
 
 ```python
 # NN-classisfier
@@ -78,31 +78,31 @@ Choose hyperparameters using validation set.
 
 <mark>Never use k-Nearest Neighbor with pixel distance.(?)</mark>
 
-![](D:\OneDrive%20-%20中山大学\研0\Stanford-CS231n-2021-and-2022\assets\2022-11-18-16-25-20-image.png)
+![](D:\OneDrive%20-%20中山大学\研0\moqj-CS231N\CS231N\note\assets\7fa64a41a9d1b9d790850fda35f4e5a9f309882e.png)
 
 ### 
 
-![](D:\OneDrive%20-%20中山大学\研0\Stanford-CS231n-2021-and-2022\assets\2022-11-18-16-34-07-image.png)
+![](D:\OneDrive%20-%20中山大学\研0\moqj-CS231N\CS231N\note\assets\b04b8e8ca33ca483a4ab9a57a9c0a4eef2b19e41.png)
 
 ### Linear Classifier
 
-![](D:\OneDrive%20-%20中山大学\研0\Stanford-CS231n-2021-and-2022\assets\2022-11-18-16-34-53-image.png)
+![](D:\OneDrive%20-%20中山大学\研0\moqj-CS231N\CS231N\note\assets\001a2c402d37f0533fab06114d30929b8c232f93.png)
 
 线性代数理解：
 
-![](D:\OneDrive%20-%20中山大学\研0\Stanford-CS231n-2021-and-2022\assets\2022-11-18-16-36-36-image.png)
+![](D:\OneDrive%20-%20中山大学\研0\moqj-CS231N\CS231N\note\assets\2f9b818a438afa6e82985f4aa6cc855abd25d6c3.png)
 
 模板匹配理解：
 
-![](D:\OneDrive%20-%20中山大学\研0\Stanford-CS231n-2021-and-2022\assets\2022-11-18-16-37-55-image.png)
+![](D:\OneDrive%20-%20中山大学\研0\moqj-CS231N\CS231N\note\assets\60e41544703425245f1a37fc5418a0df653957f2.png)
 
 空间几何学理解：
 
-![](D:\OneDrive%20-%20中山大学\研0\Stanford-CS231n-2021-and-2022\assets\2022-11-18-16-38-24-image.png)
+![](D:\OneDrive%20-%20中山大学\研0\moqj-CS231N\CS231N\note\assets\8b4032326eb3b7c30ec4ded632fefae4d4a347e0.png)
 
 线性分类器有着许多的局限性：
 
-![](D:\OneDrive%20-%20中山大学\研0\Stanford-CS231n-2021-and-2022\assets\2022-11-18-16-39-41-image.png)
+![](D:\OneDrive%20-%20中山大学\研0\moqj-CS231N\CS231N\note\assets\bda1ec4658bd18f96df2b5388dbedc878737022b.png)
 
 ## 3 - Loss Functions and Optimization
 
@@ -123,11 +123,11 @@ L_{i} &=\sum_{j \neq y_{i}}\left\{\begin{array}{ll}0 & \text { if } s_{y_{i}} \g
  \end{aligned}
 $$
 
-<img title="" src="file:///D:/OneDrive%20-%20中山大学/研0/Stanford-CS231n-2021-and-2022/assets/2022-11-18-17-10-25-image.png" alt="" width="303" data-align="center">
+<img title="" src="file:///D:/OneDrive - 中山大学/研0/moqj-CS231N/CS231N/note/assets/d29cae178611111a4622f13a029301f49e9dd1d2.png" alt="" width="303" data-align="center">
 
 if $L_i=\sum_{j\ne y_1} \max(0,s_j-s_{y_1}+1)^2$
 
-<img title="" src="file:///D:/OneDrive%20-%20中山大学/研0/Stanford-CS231n-2021-and-2022/assets/2022-11-18-17-17-35-image.png" alt="" width="272" data-align="center">
+<img title="" src="file:///D:/OneDrive - 中山大学/研0/moqj-CS231N/CS231N/note/assets/3382d972c86573ce32b1b6329e628048c4fb63a5.png" alt="" width="272" data-align="center">
 
 ```python
 def L_i_vectorized(x, y , W):
