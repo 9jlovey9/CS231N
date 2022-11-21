@@ -6,12 +6,6 @@ This is a note on the course of Stanford CS231n in the year 2021 and 2022.
 
 2021 Course Website: [Stanford University CS231n: Convolutional Neural Networks for Visual Recognition](http://cs231n.stanford.edu/2021/schedule.html)
 
-2021 Video (Chinese): [cs231n(2021) Lecture 1a_bilibili](https://www.bilibili.com/video/BV1yX4y1w79F)
-
-Chapter 1-5 arranged according to 2021 course, referencing 2022 course.
-
-Chapter 6-18 arranged according to 2022 course.
-
 | Topic                                                | Chapter |
 | ---------------------------------------------------- | ------- |
 | Deep Learning Basics                                 | 2 - 4   |
