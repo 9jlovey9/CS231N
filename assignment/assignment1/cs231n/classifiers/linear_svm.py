@@ -130,7 +130,6 @@ def svm_loss_vectorized(W, X, y, reg):
     dscores[range(N), y] = -np.sum(dscores, axis=1) #
     dscores *= dmargins    # *(1/N)
 
-    # 具体推导暂未看懂
     # dW(D,C) X(N,D) dscores(N,C)  
     dW = X.T.dot(dscores)
 
