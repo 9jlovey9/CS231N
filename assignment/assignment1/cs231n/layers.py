@@ -28,7 +28,8 @@ def affine_forward(x, w, b):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x_reshaped = x.reshape(x.shape[0], -1)  #压缩成二维的(N,D)，从(N,3,32,32) -> (N,3072)
+    out = x_reshaped @ w + b  # (N,D) * (D,M) + (M,) -> (N,M)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -61,7 +62,10 @@ def affine_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x_reshaped = x.reshape(x.shape[0], -1)  #压缩成二维 (N,C,H,W) -> (N,D)
+    dx = (dout @ w.T).reshape(x.shape[0], *x.shape[1:])
+    dw = x_reshaped.T @ dout
+    db = dout.sum(axis=0)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -87,7 +91,7 @@ def relu_forward(x):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    out = np.maximum(0, x)  #relu函数的定义式
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -114,7 +118,7 @@ def relu_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    dx = dout * (x > 0) #当x>0：ReLU函数的导数为1；当x<=0：ReLU函数的导数为0
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -773,7 +777,13 @@ def svm_loss(x, y):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N = len(y)      # number of samples
+    x_true = x[range(N), y][:, None]    # scores for true labels
+    margins = np.maximum(0, x - x_true + 1)   # margin for each score
+    loss = margins.sum() / N - 1
+    
+    dx = (margins > 0).astype(float) / N
+    dx[range(N), y] -= dx.sum(axis=1)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -803,7 +813,15 @@ def softmax_loss(x, y):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N = len(y) # number of samples
+
+    P = np.exp(x - x.max())              # numerically stable exponents
+    P /= P.sum(axis=1, keepdims=True)    # row-wise probabilities (softmax)
+
+    loss = -np.log(P[range(N), y]).sum() / N # sum cross entropies as loss
+
+    P[range(N), y] -= 1
+    dx = P / N
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
