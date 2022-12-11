@@ -63,8 +63,9 @@ class FullyConnectedNet(object):
         ############################################################################
         # TODO: Initialize the parameters of the network, storing all values in    #
         # the self.params dictionary. Store weights and biases for the first layer #
-        # in W1 and b1; for the second layer use W2 and b2, etc. Weights should be #
-        # initialized from a normal distribution centered at 0 with standard       #
+        # in W1 and b1; for the second layer use W2 and b2, etc. #
+        # Weights should be initialized #
+        # from a normal distribution centered at 0 with standard       #
         # deviation equal to weight_scale. Biases should be initialized to zero.   #
         #                                                                          #
         # When using batch normalization, store scale and shift parameters for the #
