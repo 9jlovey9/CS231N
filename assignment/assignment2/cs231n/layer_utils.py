@@ -47,27 +47,31 @@ def generic_forward(x, w, b, gamma=None, beta=None, bn_param=None, dropout_param
     # Initialize optional caches to None
     bn_cache, ln_cache, relu_cache, dropout_cache = None, None, None, None
 
-    # Affine forward is a must
+    # 首先进行 affine forward
     out, fc_cache = affine_forward(x, w, b)
 
-    # If the the layer is not last
+    # 如果不是最后一层，则要进行激活函数
+    # 根据需要加入BN/LN层，进行drop操作
+    # 要注意不同层之间的先后关系
+    
     if not last:
-        # If it has normalization layer we normalize outputs: if it bn_param
-        # has mode (train | test), it's batchnorm, otherwise, it's layernorm
+        # 先处理BN层：
+        # 如果 bn_param 有参数，则需要正则化
+        # 若参数为：mode (train | test)，则是BN层；否则为LN层
         if bn_param is not None:
             if 'mode' in bn_param:
                 out, bn_cache = batchnorm_forward(out, gamma, beta, bn_param)
             else:
                 out, ln_cache = layernorm_forward(out, gamma, beta, bn_param)
 
-        # Pass the outputs through activation
-        out, relu_cache = relu_forward(out) # perform relu
+        # BN/LN层后，进行激活函数
+        out, relu_cache = relu_forward(out)
 
-        # Use dropout if we are given its parameters
+        # 激活函数后，是drop层
         if dropout_param is not None:
             out, dropout_cache = dropout_forward(out, dropout_param)
     
-    # Prepare cache for backward pass
+    # 存储反向传播所需要的cache
     cache = fc_cache, bn_cache, ln_cache, relu_cache, dropout_cache
 
     return out, cache
@@ -75,27 +79,27 @@ def generic_forward(x, w, b, gamma=None, beta=None, bn_param=None, dropout_param
 def generic_backward(dout, cache):
     """Backward pass for the affine-bn/ln?-relu-dropout? convenience layer.
     """
-    # Init norm params to None
+    # 初始化参数
     dgamma, dbeta = None, None
 
-    # Get the prapared caches from the forward pass
+    # 获取不同层的反向传播所需的参数
     fc_cache, bn_cache, ln_cache, relu_cache, dropout_cache = cache
 
-    # If dropout was performed
+    # 如果有Drop层，则进行drop的反向传播
     if dropout_cache is not None:
         dout = dropout_backward(dout, dropout_cache)
     
-    # If relu was performed
+    # 进行ReLU激活函数的反向传播
     if relu_cache is not None:
         dout = relu_backward(dout, relu_cache)
 
-    # If norm was performed
+    # 如果有进行正则化操作，进行反向传播
     if bn_cache is not None:
-        dout, dgamma, dbeta = batchnorm_backward_alt(dout, bn_cache)
+        dout, dgamma, dbeta = batchnorm_backward_alt(dout, bn_cache)    #选alt方法，快一些 :)
     elif ln_cache is not None:
         dout, dgamma, dbeta = layernorm_backward(dout, ln_cache)
     
-    # Affine backward is a must
+    # affine backward
     dx, dw, db = affine_backward(dout, fc_cache)
 
     return dx, dw, db, dgamma, dbeta

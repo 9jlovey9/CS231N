@@ -24,9 +24,13 @@ def affine_forward(x, w, b):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    out = x.reshape(len(x), -1) @ w + b
-
+    
+    # 先将输入x进行调整矩阵大小至 x(N,D),D=d_1*d_2*...*d_k表示维度
+    #out = x * w + b ==> x(N,D) * w(D,M) + b(M,) = out(N,M), 在分类任务中，M一般表示类别数量
+    #out = x.reshape(len(x), -1) @ w + b
+    
+    out = x.reshape(x.shape[0], -1) @ w + b
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -56,10 +60,15 @@ def affine_backward(dout, cache):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    dx = (dout @ w.T).reshape(x.shape)
-    dw = x.reshape(len(x), -1).T @ dout
-    db = dout.sum(axis=0)
+    
+    # out = x.reshape(x.shape[0], -1) @ w + b   #(N,D)*(D,M)+(M,) = (N,M)
+    # 根据assignment-notes的Section1结论，Y=XW，则有
+    # dX = dY @ W.T
+    # dW = X.T @ dY
+    #print(dout.shape,w.T.shape)
+    dx = (dout @ w.T).reshape(x.shape)          # (N,M) * (M,D) -> (N,D) -> (N,d_1,d_2,...,d_k)
+    dw = x.reshape(x.shape[0], -1).T @ dout     # (D,N) * (N,M) -> (D,M)
+    db = dout.sum(axis=0)                       # b这里是利用了广播特性，从上到下的梯度均为1，加起来即可
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -83,7 +92,8 @@ def relu_forward(x):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    # ReLu函数表达式：
+    
     out = np.maximum(0, x)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -109,7 +119,8 @@ def relu_backward(dout, cache):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    
+    # 若x>0，则导数为1，若x<=0，则梯度为0
     dx = dout * (x > 0)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -138,17 +149,19 @@ def softmax_loss(x, y):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    N = len(y) # number of samples
-
-    P = np.exp(x - x.max(axis=1, keepdims=True)) # numerically stable exponents
-    P /= P.sum(axis=1, keepdims=True)            # row-wise probabilities (softmax)
-
-    loss = -np.log(P[range(N), y]).sum() / N     # sum cross entropies as loss
-
-    P[range(N), y] -= 1
-    dx = P / N
-
+    # https://cs231n.github.io/linear-classify/#softmax-classifier
+    
+    N = len(y)                                                      #N表示样本个数
+    #print(x.shape)
+    s_stable = x - x.max(axis=1, keepdims=True)                     # 为了防止数值爆炸，先减去最大值，使数值都小于0
+    s_stable_exp = np.exp(s_stable)                                 # 指数处理 
+    p = s_stable_exp / s_stable_exp.sum(axis=1, keepdims=True)      # 分别求每一个样本不同类别的概率(softmax)
+    
+    loss = -np.log(p[range(N), y]).sum() / N                        # 交叉熵的损失函数：-y_i log p_i，多样本则求和再平均
+    
+    dx = p                                                          # 对dx的求导，可以看assignment-notes Section2的推导
+    dx[range(N), y] -= 1                                             
+    dx /= N
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -193,12 +206,12 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     - out: of shape (N, D)
     - cache: A tuple of values needed in the backward pass
     """
-    mode = bn_param["mode"]
+    mode = bn_param["mode"]         # mode: 'train' or 'test'; required
     eps = bn_param.get("eps", 1e-5)
     momentum = bn_param.get("momentum", 0.9)
 
     N, D = x.shape
-    running_mean = bn_param.get("running_mean", np.zeros(D, dtype=x.dtype))
+    running_mean = bn_param.get("running_mean", np.zeros(D, dtype=x.dtype)) #在测试时用到的就是滑动平均值
     running_var = bn_param.get("running_var", np.zeros(D, dtype=x.dtype))
 
     out, cache = None, None
@@ -225,21 +238,24 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # might prove to be helpful.                                          #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-        # review:axis=0表示从上到下，axis=1从左到右
         
-        mu = x.mean(axis=0)        # batch mean for each feature
-        var = x.var(axis=0)        # batch variance for each feature
-        std = np.sqrt(var + eps)   # batch standard deviation for each feature
-        x_hat = (x - mu) / std     # standartized x
-        out = gamma * x_hat + beta # scaled and shifted x_hat
+        # review:axis=0表示从上到下，axis=1从左到右
+        # 根据公式一步一步来写 
+        # x(N,D) gamma(D,) beta(D) 
+        
+        mu = x.mean(axis=0)              # (D,) 分别计算N个不同样本同一个特征的均值
+        var = x.var(axis=0)              # (D,) 分别计算N个不同样本同一个特征的方差
+        std = np.sqrt(var + eps)             # (D,) 计算标准差，加上偏置（防止下面分母为0）
+        #std = x.std(axis = 0)           # (D,) 利用np.std可以一步到位
+        x_hat = (x - mu) / std           # (N,D) 进行正则化
+        out = gamma * x_hat + beta       # (N,D) 对输入x进行缩放和平移
 
-        shape = bn_param.get('shape', (N, D))              # reshape used in backprop
-        axis = bn_param.get('axis', 0)                     # axis to sum used in backprop
-        cache = x, mu, var, std, gamma, x_hat, shape, axis # save for backprop
+        # 在测试阶段，要计算输入x的滑动平均均值和方差
+        running_mean = momentum * running_mean + (1 - momentum) * mu # 更新总体均值
+        running_var = momentum * running_var + (1 - momentum) * var  # 更新总体方差
+        
+        cache = (gamma, beta, mu, var, std, x_hat, eps, x)
 
-        if axis == 0:                                                    # if not batchnorm
-            running_mean = momentum * running_mean + (1 - momentum) * mu # update overall mean
-            running_var = momentum * running_var + (1 - momentum) * var  # update overall variance
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
@@ -297,20 +313,32 @@ def batchnorm_backward(dout, cache):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     # https://kratzert.github.io/2016/02/12/understanding-the-gradient-flow-through-the-batch-normalization-layer.html
-
-    x, mu, var, std, gamma, x_hat, shape, axis = cache          # expand cache
-
-    dbeta = dout.reshape(shape, order='F').sum(axis)            # derivative w.r.t. beta
-    dgamma = (dout * x_hat).reshape(shape, order='F').sum(axis) # derivative w.r.t. gamma
-
-    dx_hat = dout * gamma                                       # derivative w.t.r. x_hat
-    dstd = -np.sum(dx_hat * (x-mu), axis=0) / (std**2)          # derivative w.t.r. std
-    dvar = 0.5 * dstd / std                                     # derivative w.t.r. var
-    dx1 = dx_hat / std + 2 * (x-mu) * dvar / len(dout)          # partial derivative w.t.r. dx
-    dmu = -np.sum(dx1, axis=0)                                  # derivative w.t.r. mu
-    dx2 = dmu / len(dout)                                       # partial derivative w.t.r. dx
-    dx = dx1 + dx2                                              # full derivative w.t.r. x
-
+    # 下面的方法就是参照了上面网页，利用计算图进行求解
+    
+    gamma, beta, mu, var, std, x_hat, eps, x = cache
+    N = x.shape[0]
+    
+    # 正向传播：
+    # mu = x.mean(axis=0)
+    # var = x.var(axis=0)
+    # std = np.sqrt(var) + eps
+    # x_hat = (x - mu) / std
+    # out = gamma * x_hat + beta
+    
+    dbeta = np.sum(dout, axis=0)            # (D,)
+    
+    dgamma = np.sum(dout * x_hat, axis=0)   # dout(N,D).*dx_hat(N,D)->(N,D)，这里的正向传播是广播机制，要取sum
+    dx_hat = dout * gamma
+    
+    dstd = -np.sum(dx_hat * (x-mu), axis=0) / (std**2)  #(D,) 这里也是要注意，正向传播利用了广播机制，因此要取sum
+    dvar = 0.5 * dstd / std                             #(D,)
+    
+    #dx由两部分组成，参考计算图即可
+    dx1 = dx_hat / std + 2 * (x-mu) * dvar / N 
+    dmu = -np.sum(dx1, axis=0)
+    dx2 = dmu / N 
+    dx = dx1 + dx2
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -343,14 +371,18 @@ def batchnorm_backward_alt(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    _, _, _, std, gamma, x_hat, shape, axis = cache # expand cache
-    S = lambda x: x.sum(axis=0)                     # helper function
+    # 这里直接对着论文推导的导数公式即可
+    gamma, beta, mu, var, std, x_hat, eps, x = cache
+    N = x.shape[0]
     
-    dbeta = dout.reshape(shape, order='F').sum(axis)            # derivative w.r.t. beta
-    dgamma = (dout * x_hat).reshape(shape, order='F').sum(axis) # derivative w.r.t. gamma
+    S = lambda x: x.sum(axis=0)     # 在BN算法中，都是对同一特征进行求均值，因此axis=0
     
-    dx = dout * gamma / (len(dout) * std)          # temporarily initialize scale value
-    dx = len(dout)*dx  - S(dx*x_hat)*x_hat - S(dx) # derivative w.r.t. unnormalized x
+    #dbeta,dgamma和上面是一样的
+    dbeta = np.sum(dout, axis=0)            # (D,)
+    dgamma = np.sum(dout * x_hat, axis=0)
+    
+    dx = dout * gamma / (N * std)
+    dx = N*dx  - S(dx*x_hat)*x_hat - S(dx)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -394,13 +426,16 @@ def layernorm_forward(x, gamma, beta, ln_param):
     # the batch norm code and leave it almost unchanged?                      #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    mean = np.mean(x, axis=1, keepdims=True)
+    
+    # 根据提示，可以通过对输入进行转置，然后进行BN的forward
+    # 这里采用的是详细版（上面的做法容易出错）
+    
+    mu = np.mean(x, axis=1, keepdims=True)    # 求均值，注意这里的是axis=1，BN的是axis=0
     std = np.std(x, axis=1, keepdims=True)
-    out_hat = (x - mean) / (std + eps)
-    out = gamma * out_hat + beta
+    x_hat = (x - mu) / (std + eps)
+    out = gamma * x_hat + beta
 
-    cache = (gamma, beta, mean, std, out_hat, eps, x)
+    cache = (gamma, beta, mu, std, x_hat, eps, x)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -433,18 +468,25 @@ def layernorm_backward(dout, cache):
     # still apply!                                                            #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    gamma, beta, mean, std, out_hat, eps, x = cache
+    
+    # 基本上和BN是一样的，仅是要注意axis在不同情况下的取值
+    # 考虑不同维度所表示的物理意义
+    
+    gamma, beta, mu, std, x_hat, eps, x = cache
     D = x.shape[1]
-    dgamma = np.sum(dout * out_hat, axis=0)
+    
+    dgamma = np.sum(dout * x_hat, axis=0)
+    
     dbeta = np.sum(dout, axis=0)
-    dout_hat = dout * gamma  # (N, D)
+    dx_hat = dout * gamma  # (N, D)
 
-    dvar = dout_hat * (x - mean) * -0.5 * (std + eps)**-2 / std
+    dvar = dx_hat * (x - mu) * -0.5 * (std + eps)**-2 / std
     dvar = np.sum(dvar, axis=1, keepdims=True)  # (D,)
-    dmean = -dout_hat / (std + eps) + dvar * -2 * (x - mean) / D
-    dmean = np.sum(dmean, axis=1, keepdims=True)  # (D,)
-    dx = dout_hat / (std + eps) + dvar * 2 * (x - mean) / D + dmean / D
+    
+    dmu = -dx_hat / (std + eps) + dvar * -2 * (x - mu) / D
+    dmu = np.sum(dmu, axis=1, keepdims=True)  # (D,)
+    
+    dx = dx_hat / (std + eps) + dvar * 2 * (x - mu) / D + dmu / D
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -489,9 +531,12 @@ def dropout_forward(x, dropout_param):
         # Store the dropout mask in the mask variable.                        #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        mask = (np.random.randn(*x.shape) < p) / p
-        out = x * mask
+        
+        # 根据上面的提示，这里写的是 inverted 版本，就是训练的时候，就要除以p
+        # 这样在测试时不要进行特殊处理
+        
+        mask = (np.random.randn(*x.shape) < p) / p  #创造概率矩阵，决定每一项的抛弃与否，记得除以p
+        out = x * mask  # 将输入与drop层相乘，随机舍弃
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
@@ -502,7 +547,8 @@ def dropout_forward(x, dropout_param):
         # TODO: Implement the test phase forward pass for inverted dropout.   #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # inverted 做法在测试时，不需要进行其他操作
         out = x
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -532,7 +578,8 @@ def dropout_backward(dout, cache):
         # TODO: Implement training phase backward pass for inverted dropout   #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # drop层就是由0 1组成的随机drop矩阵，在1的地方梯度为1
         dx = dout * mask
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -577,19 +624,28 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    # 从写法来看，其实和FCN写法差不多，先将网络参数进行赋值，然后初始化，然后正向传播
+    # 注意输出输出矩阵的维度即可
+    
     pad = conv_param['pad']
     stride = conv_param['stride']
     N, C, H, W = x.shape  #
     F, C, HH, WW = w.shape  #
     h_out = (H - HH + 2*pad) // stride + 1
     w_out = (W - WW + 2*pad) // stride + 1
-
-    assert (H - HH + 2*pad) % stride == 0
-    assert (W - WW + 2*pad) % stride == 0
+    
+    # 不是很理解为什么要这两行
+    # assert (H - HH + 2*pad) % stride == 0
+    # assert (W - WW + 2*pad) % stride == 0
 
     padded_x = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), 'constant')  # (N,C,H,W)
     out = np.zeros((N, F, h_out, w_out))
     w_cur = w.reshape((1, F, -1))  # (1, F, C*HH*WW)
+    
+    # 这里用双重循环来写，虽然效率可能较低，不过方便理解。
+    # 三重循环最容易理解，不过二重的精巧一些
+    # 参考代码这部分是利用了window函数，就可以取出窗口，不写双重循环
+    
     for hi in range(h_out):
       for wi in range(w_out):
         x_cur = padded_x[:, :, hi*stride:hi*stride+HH, wi*stride:wi*stride+WW]  # (N, C, HH, WW)
@@ -624,6 +680,7 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     
+    # 反向传播第一步：取出参数，初始化
     x, w, b, conv_param = cache
     dx = np.zeros_like(x)  # (N, C, H, W)
     dw = np.zeros_like(w)  # (F, C, HH, WW)
@@ -635,14 +692,24 @@ def conv_backward_naive(dout, cache):
     F, C, HH, WW = w.shape
     h_out = (H - HH + 2*pad) // stride + 1
     w_out = (W - WW + 2*pad) // stride + 1
-    assert (H - HH + 2*pad) % stride == 0
-    assert (W - WW + 2*pad) % stride == 0
-    padded_x = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), 'constant')  #
+    
+    #依旧是不知道这列是在干啥，感觉上应该是为了排错，但是我觉得=0也没有问题才对
+    #assert (H - HH + 2*pad) % stride == 0
+    #ssert (W - WW + 2*pad) % stride == 0
+    
+    padded_x = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), 'constant')
     dpadded_x = np.zeros_like(padded_x)
     
+    # 因为w和x都是高维的，压缩至三维的情况，将表征特征的都压缩在一维
+    # 和正向传播时一致
+    
     w_cur = w.reshape((1, F, -1))  # (1, F, C*HH*WW)
-    for h in range(h_out)[::-1]:
-      for w in range(w_out)[::-1]:
+    
+    # 这里在纸上画出三维图进行推导比较清晰
+    # 要注意axis=0/1/2的情况
+    
+    for h in range(h_out):
+      for w in range(w_out):
         x_cur = padded_x[:, :, h*stride:h*stride+HH, w*stride:w*stride+WW]  # (N, C, HH, WW)
         x_cur = x_cur.reshape((N, 1, -1))  # (N, 1, C*HH*WW)
         
@@ -653,12 +720,18 @@ def conv_backward_naive(dout, cache):
         # out[:, :, h, w] = xw_cur
 
         dxw_cur = dout[:, :, h, w]  # (N, F)
+        
         db += np.sum(dxw_cur, axis=0)   #(F,)
+        
         dxw_cur_tmp = np.expand_dims(dxw_cur, 2)  # 扩充第三个维度(N, F)->(N, F, 1)
         dxw_tmp = np.ones((N, F, C*HH*WW)) * dxw_cur_tmp  # (N, F, C*HH*WW)
+        
         dx_cur = dxw_tmp * w_cur  # (N, F, C*HH*WW)
+        
         dw_cur = dxw_tmp * x_cur  # (N, F, C*HH*WW)
+        
         dw += np.sum(dw_cur, axis=0).reshape(dw.shape)
+        
         dpadded_x[:, :, h*stride:h*stride+HH, w*stride:w*stride+WW] += np.sum(dx_cur, axis=1).reshape((N, C, HH, WW))
     dx = dpadded_x[:, :, pad:-pad, pad:-pad]
 
@@ -694,7 +767,10 @@ def max_pool_forward_naive(x, pool_param):
     # TODO: Implement the max-pooling forward pass                            #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    
+    # 和CNN层的传播写法是一样的，首先计算维度的大小的变化
+    # 然后双重循环即可
+    
     N, C, H, W = x.shape
     pool_height = pool_param['pool_height']
     pool_width = pool_param['pool_width']
@@ -702,6 +778,7 @@ def max_pool_forward_naive(x, pool_param):
     H_out = 1 + (H - pool_height) // stride
     W_out = 1 + (W - pool_width) // stride
     out = np.zeros((N, C, H_out, W_out))
+    
     for h in range(H_out):
       for w in range(W_out):
         out[:, :, h, w] = x[:, :, h*stride:h*stride+pool_height, w*stride:w*stride+pool_width].max(2).max(2)
@@ -730,6 +807,10 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    # maxpool层的反向传播的关键是找到最大值的索引
+    # 对最大值的位置梯度为1，其他都为0
+    
+    # 第一步还是赋值
     x, pool_param = cache
     N, C, H, W = x.shape
     pool_height = pool_param['pool_height']
@@ -739,12 +820,13 @@ def max_pool_backward_naive(dout, cache):
     W_out = 1 + (W - pool_width) // stride
     dx = np.zeros_like(x)  # N, C, H, W
     
-    for h in range(H_out)[::-1]:
-      for w in range(W_out)[::-1]:
+    # 因为写的是二重循环，都需要将四维压缩至三维进行操作
+    for h in range(H_out):
+      for w in range(W_out):
         x_tmp = x[:, :, h*stride:h*stride+pool_height, w*stride:w*stride+pool_width].reshape(N*C, -1)  # (N,C,pH,pW) -> (N*C, pool_height*pool_width)
         x_idx = np.argmax(x_tmp, axis=1)  # (N*C,1) 找到每一行最大值的索引
-        dx_tmp = np.zeros((N*C, pool_height*pool_width))
-        dx_tmp[range(N*C), x_idx] = dout[:, :, h, w].flatten()  # (N*C, pool_height*pool_width)
+        dx_tmp = np.zeros((N*C, pool_height*pool_width))    #除了最大值索引的位置梯度为1，其余都是0
+        dx_tmp[range(N*C), x_idx] = dout[:, :, h, w].flatten()  # (N*C, pool_height*pool_width)，最大值索引处梯度为1
         dx[:, :, h*stride:h*stride+pool_height, w*stride:w*stride+pool_width] += dx_tmp.reshape((N, C, pool_height, pool_width))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -785,7 +867,9 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     # Your implementation should be very short; ours is less than five lines. #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    
+    # 这里本质上就是BN，不过将特征作为一个维度，其余的压缩至一个维度即可
+    
     N, C, H, W = x.shape
     x = x.transpose(0, 2, 3, 1).reshape(-1, C)                #(N,C,H,W) -> (N,H,W,C) -> (N*H*W,C)
     out, cache = batchnorm_forward(x, gamma, beta, bn_param)
@@ -822,6 +906,8 @@ def spatial_batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    # 这里也是进行维度的压缩，然后和BN的是一致的
+    
     N, C, H, W = dout.shape
     dout = dout.transpose(0, 2, 3, 1).reshape(-1, C)        #(N,C,H,W) -> (N,H,W,C) -> (N*H*W,C)
     dx, dgamma, dbeta = batchnorm_backward(dout, cache)
@@ -865,16 +951,18 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     # and layer normalization!                                                #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    
+    # 这里的代码也是可以根据BN或者LN的代码修改而来
+    
     N, C, H, W = x.shape
     x_group = x.reshape(N, G, -1) #(N,C,H,W) -> (N,G,C/G*H*W)
-    mean = np.mean(x_group, axis=2, keepdims=True)  # (N, G)
+    mu = np.mean(x_group, axis=2, keepdims=True)  # (N, G)
     std = np.std(x_group, axis=2, keepdims=True)
-    out_hat = (x_group - mean) / (std + eps)
-    out_hat = out_hat.reshape(x.shape)
-    out = gamma * out_hat + beta
+    x_hat = (x_group - mu) / (std + eps)
+    x_hat = x_hat.reshape(x.shape)
+    out = gamma * x_hat + beta
 
-    cache = (gamma, beta, mean, std, out_hat, eps, x, G)
+    cache = (gamma, beta, mu, std, x_hat, eps, x, G)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -903,20 +991,20 @@ def spatial_groupnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     
-    gamma, beta, mean, std, out_hat, eps, x, G = cache
+    gamma, beta, mu, std, x_hat, eps, x, G = cache
     N, C, H, W = x.shape
-    dgamma = np.sum(dout * out_hat, axis=(0, 2, 3), keepdims=True)
+    dgamma = np.sum(dout * x_hat, axis=(0, 2, 3), keepdims=True)
     dbeta = np.sum(dout, axis=(0, 2, 3), keepdims=True)
-    dout_hat = dout * gamma  # (N, C, H, W)
+    dx_hat = dout * gamma  # (N, C, H, W)
 
-    dout_hat = dout_hat.reshape(N, G, -1)
+    dx_hat = dx_hat.reshape(N, G, -1)
     x = x.reshape(N, G, -1)
     D = x.shape[2]
-    dvar = dout_hat * (x - mean) * -0.5 * (std + eps)**-2 / std
+    dvar = dx_hat * (x - mu) * -0.5 * (std + eps)**-2 / std
     dvar = np.sum(dvar, axis=2, keepdims=True)  # (N, G)
-    dmean = -dout_hat / (std + eps) + dvar * -2 * (x - mean) / D
-    dmean = np.sum(dmean, axis=2, keepdims=True)  # (N, G)
-    dx = dout_hat / (std + eps) + dvar * 2 * (x - mean) / D + dmean / D
+    dmu = -dx_hat / (std + eps) + dvar * -2 * (x - mu) / D
+    dmu = np.sum(dmu, axis=2, keepdims=True)  # (N, G)
+    dx = dx_hat / (std + eps) + dvar * 2 * (x - mu) / D + dmu / D
     dx = dx.reshape((N, C, H, W))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****

@@ -63,19 +63,21 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         
-        F, (C, H, W) = num_filters, input_dim # dim size
+        # 记录CNN网络的参数情况
+        F, (C, H, W) = num_filters, input_dim
 
         # conv - relu - 2x2 max pool - affine - relu - affine - softmax
         
         HP, WP = 1 + (H - 2)//2, 1 + (W - 2)//2  # max pooling
         
+        # W(F,C,H,W) b(F,)
         self.params.update({
-            'W1': np.random.randn(F, C, filter_size, filter_size) * weight_scale, # consider all filter shapes
-            'b1': np.zeros(num_filters),                                          # consider number of filters
-            'W2': np.random.randn(F * HP * WP, hidden_dim) * weight_scale,        # consider reduced pool output
-            'b2': np.zeros(hidden_dim),                                           # consider number of hidden nodes
-            'W3': np.random.randn(hidden_dim, num_classes) * weight_scale,        # consider hiddden and output nodes
-            'b3': np.zeros(num_classes),                                          # consider output nodes
+            'W1': np.random.randn(F, C, filter_size, filter_size) * weight_scale, # 第一层是conv，四维(F,C,H,W)
+            'b1': np.zeros(num_filters),                                          # (F,)，每一个卷积核对应一个偏置
+            'W2': np.random.randn(F * HP * WP, hidden_dim) * weight_scale,        # 第二层是affine，二维(D_in,D_out)
+            'b2': np.zeros(hidden_dim),                                           # (D_out,)
+            'W3': np.random.randn(hidden_dim, num_classes) * weight_scale,        # 第三层是affine，二维(D_in,D_out)，
+            'b3': np.zeros(num_classes),                                          # (D_out,)由于是最后一层，D_out -> num_classes
         })
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -115,11 +117,13 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+        # 这部分代码，就是在搭积木，将接口连在一起就可以了
+        
         # conv - relu - 2x2 max pool - affine - relu - affine - softmax
         
-        out, cache1 = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param) # CONV forward pass
-        out, cache2 = affine_relu_forward(out, W2, b2)                          # FC forward pass
-        scores, cache3 = generic_forward(out, W3, b3, last=True)                # last forward pass
+        out, cache1 = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param) # 第一层conv层的接口
+        out, cache2 = affine_relu_forward(out, W2, b2)                          # 第二层fc层接口
+        scores, cache3 = affine_forward(out, W3, b3)                            # 第三层fc层（最后一层）的接口
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -141,17 +145,20 @@ class ThreeLayerConvNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        
+        
+        loss, dout = softmax_loss(scores, y)    # 反向传播首先进行softmax的分类器，计算交叉熵损失                       
+        loss += 0.5 * self.reg * (np.sum(W1**2) + np.sum(W2**2) + np.sum(W3**2)) # 加上权重参数的正则化损失
 
-        loss, dout = softmax_loss(scores, y)                                     # loss and dout
-        loss += 0.5 * self.reg * (np.sum(W1**2) + np.sum(W2**2) + np.sum(W3**2)) # regularized loss
+        # 下面也是进行调用反向传播函数
+        dout, grads['W3'], grads['b3'], = affine_backward(dout, cache3)          # 第三层fc层
+        dout, grads['W2'], grads['b2'], = affine_relu_backward(dout, cache2)     # 第二层affine-relu层
+        dout, grads['W1'], grads['b1'], = conv_relu_pool_backward(dout, cache1)  # 第一层conv-relu-pool层
 
-        dout, grads['W3'], grads['b3'], _, _ = generic_backward(dout, cache3)    # first backward pass
-        dout, grads['W2'], grads['b2'], = affine_relu_backward(dout, cache2)     # FC backward pass
-        dout, grads['W1'], grads['b1'], = conv_relu_pool_backward(dout, cache1)  # CONV backward pass
-
-        grads['W3'] += self.reg * W3 # L2 for W3
-        grads['W2'] += self.reg * W2 # L2 for W2
-        grads['W1'] += self.reg * W1 # L2 for W1
+        # 权重矩阵要加上L2正则化梯度
+        grads['W3'] += self.reg * W3 
+        grads['W2'] += self.reg * W2
+        grads['W1'] += self.reg * W1
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

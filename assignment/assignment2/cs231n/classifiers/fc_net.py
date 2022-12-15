@@ -74,16 +74,24 @@ class FullyConnectedNet(object):
         # parameters should be initialized to zeros.                               #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # 初始化权重系数，每一层的偏置b均赋值为0，权重w要乘以weight_scale
+        # 每一层的权重矩阵的维度要注意，是(上一层的维度D_in,本层的维度D_out)
+        # zip([a],[b])，zip函数可以将a和b进行一一对应，因此将网络各层维度进行平移再对应，可以得到每层w的大小
+        # f'string' 格式化输入
+        
+        # l表示layer_num，鉴于l从0开始，所以取l+1层，从第一层开始赋值
+        # i -> D_in, j -> D_out
         for l, (i, j) in enumerate(zip([input_dim, *hidden_dims], [*hidden_dims, num_classes])):
             self.params[f'W{l+1}'] = np.random.randn(i, j) * weight_scale
             self.params[f'b{l+1}'] = np.zeros(j)
-
-            if self.normalization and l < self.num_layers-1:
+            
+            # 若网络需要进行BN，且不是最后一层，对参数gamma和beta进行初始化
+            # gamma - scale, beta - shift, gamme 初始化为 1, beta 初始化为 0 
+            
+            if self.normalization and l+1 < self.num_layers:
                 self.params[f'gamma{l+1}'] = np.ones(j)
                 self.params[f'beta{l+1}'] = np.zeros(j)
-
-        # del self.params[f'gamma{l+1}'], self.params[f'beta{l+1}'] # no batchnorm after last FC
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -160,15 +168,16 @@ class FullyConnectedNet(object):
         cache = {}
         
         for l in range(self.num_layers):
-            keys = [f'W{l+1}', f'b{l+1}', f'gamma{l+1}', f'beta{l+1}']   # list of params
-            w, b, gamma, beta = (self.params.get(k, None) for k in keys) # get param vals
+            keys = [f'W{l+1}', f'b{l+1}', f'gamma{l+1}', f'beta{l+1}']      # 取出该层的参数
+            w, b, gamma, beta = (self.params.get(k, None) for k in keys)
 
-            bn = self.bn_params[l] if gamma is not None else None  # bn params if exist
-            do = self.dropout_param if self.use_dropout else None  # do params if exist
+            bn = self.bn_params[l] if gamma is not None else None       # 如果BN参数存在，则有BN层，注意取l，不取l+1
+            drop = self.dropout_param if self.use_dropout else None     # 此处，drop的参数是统一的，因此仅有一个drop参数
 
-            X, cache[l] = generic_forward(X, w, b, gamma, beta, bn, do, l==self.num_layers-1) # generic forward pass
+            # 进行 affine-bn/ln?-relu-dropout? 正向传播
+            X, cache[l] = generic_forward(X, w, b, gamma, beta, bn, drop, l==self.num_layers-1)
 
-        scores = X
+        scores = X  #最后一层的输出X即是scores
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -194,17 +203,23 @@ class FullyConnectedNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # 将得分送入softmax分类器
         loss, dout = softmax_loss(scores, y)
+        
+        # loss + L2正则化项（偏置b的正则化不需要加进去，会出错）
+        # if 'W' in k 是必要的
         loss += 0.5 * self.reg * np.sum([np.sum(W**2) for k, W in self.params.items() if 'W' in k])
-
+        
+        # 从后往前(reversed)，对每一层进行反向传播
         for l in reversed(range(self.num_layers)):
             dout, dW, db, dgamma, dbeta = generic_backward(dout, cache[l])
 
-            grads[f'W{l+1}'] = dW + self.reg * self.params[f'W{l+1}']
+            grads[f'W{l+1}'] = dW + self.reg * self.params[f'W{l+1}']   #加上L2正则化项梯度
             grads[f'b{l+1}'] = db
 
-            if dgamma is not None and l < self.num_layers-1:
+            # 如果该层进行了BN，且不是最后一层，记录BN层的反向传播的梯度参数
+            if dgamma is not None and l+1 < self.num_layers:
                 grads[f'gamma{l+1}'] = dgamma
                 grads[f'beta{l+1}'] = dbeta
 
